@@ -99,7 +99,7 @@ export function createApp({ weather = createWeatherService() } = {}) {
         sendJson(res, 503, {
           error: "upstream_unavailable",
           message:
-            "Open-Meteo did not return a usable forecast and nothing is cached. Retry shortly.",
+            "Open-Meteo did not return a usable forecast and nothing is cached. try again shortly.",
         });
       }
       return;
