@@ -1,0 +1,9 @@
+{
+  "name": "isobar",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test server/test/gates.test.js"
+  }
+}

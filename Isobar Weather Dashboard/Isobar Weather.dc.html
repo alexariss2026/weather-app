@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500&amp;family=DM+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/d3-array@3"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-geo@3"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+<style>
+html,body{margin:0;background:#0A0D12;color:#E9E6DF;overflow-anchor:none}
+*{box-sizing:border-box}
+a{color:#FFC857;text-decoration:none}a:hover{color:#FFE2A0}
+input::placeholder{color:#6E7580}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+@keyframes iso-pulse{0%,100%{transform:scale(1);opacity:.22}50%{transform:scale(1.7);opacity:0}}
+@keyframes iso-rain{0%{transform:translateY(-16px);opacity:0}12%{opacity:.85}100%{transform:translateY(120px);opacity:0}}
+@keyframes iso-snow{0%{transform:translateY(-10px) translateX(0);opacity:0}20%{opacity:.9}100%{transform:translateY(130px) translateX(16px);opacity:0}}
+@keyframes iso-cloud{0%{transform:translateX(-6%)}100%{transform:translateX(10%)}}
+@keyframes iso-flash{0%,90%,100%{opacity:0}93%{opacity:.28}}
+@keyframes iso-glow{0%,100%{opacity:.35}50%{opacity:.7}}
+.iso-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top));border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:30;background:#0A0D12}
+.iso-brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.iso-kicker{display:none}
+.iso-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.iso-main{flex:1;display:flex;flex-direction:column;min-width:0}
+.iso-detail{order:1;min-width:0;padding:8px 16px 20px;display:flex;flex-direction:column;gap:22px;scroll-margin-top:156px}
+.iso-map{order:2;min-width:0;padding:8px 16px 8px;display:flex;flex-direction:column;gap:16px}
+.iso-list{order:3;min-width:0;display:flex;flex-direction:column;border-top:1px solid rgba(255,255,255,.07)}
+.iso-list-scroll{padding:0 10px max(28px,env(safe-area-inset-bottom))}
+.iso-map-stage{position:relative}
+.iso-map-frame{aspect-ratio:1000/389;width:100%;height:auto;max-height:none}
+.iso-temp{font-family:'Space Grotesk',sans-serif;font-size:clamp(72px,28vw,120px);line-height:.85;font-weight:300;letter-spacing:-0.04em}
+.iso-zoom{display:flex;flex-direction:row;justify-content:center;align-items:center;gap:8px;margin-top:8px}
+.iso-zoom button{width:44px;height:40px;touch-action:manipulation}
+.iso-zoom button:last-of-type{width:auto;min-width:44px;padding:0 10px}
+@media (min-width:1100px){
+  .iso-header{align-items:center;gap:24px;padding:18px 28px;position:static}
+  .iso-kicker{display:block}
+  .iso-tools{gap:20px;flex-wrap:nowrap}
+  .iso-main{flex-direction:row;align-items:stretch}
+  .iso-list{order:1;flex:0 0 300px;max-width:330px;border-top:0;border-right:1px solid rgba(255,255,255,.07);max-height:calc(100vh - 67px)}
+  .iso-list-scroll{flex:1;overflow-y:auto;padding-bottom:16px;min-height:0}
+  .iso-map{order:2;flex:1 1 520px;padding:24px 28px;gap:20px;max-height:calc(100vh - 67px);overflow-y:auto}
+  .iso-detail{order:3;flex:0 0 360px;max-width:420px;border-left:1px solid rgba(255,255,255,.07);padding:24px 26px;gap:26px;max-height:calc(100vh - 67px);overflow-y:auto}
+  .iso-map-frame{max-height:none}
+  .iso-zoom{position:absolute;top:12px;left:12px;margin-top:0;flex-direction:column;align-items:stretch}
+  .iso-zoom button{width:36px;height:32px}
+  .iso-zoom button:last-of-type{min-width:36px;height:32px}
+}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#0A0D12;color:#E9E6DF;font-family:'DM Sans',system-ui,sans-serif;display:flex;flex-direction:column">
+  <header class="iso-header">
+    <div class="iso-brand">
+      <div style="font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:600;letter-spacing:-0.02em">Isobar</div>
+      <div class="iso-kicker" style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A919C">{{ kicker }}</div>
+    </div>
+    <div class="iso-tools">
+      <div style="display:flex;align-items:center;gap:8px;font-family:'DM Mono',monospace;font-size:11px;color:#8A919C;letter-spacing:.04em">
+        <span style="width:7px;height:7px;border-radius:50%;background:{{ statusColor }}"></span>
+        <span>{{ statusText }}</span>
+        <span style="color:#4A515C">·</span>
+        <span>{{ utcTime }} UTC</span>
+      </div>
+      <div style="display:flex;padding:3px;border-radius:999px;background:#141A22;border:1px solid rgba(255,255,255,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)">
+        <button onClick="{{ setFr }}" style="border:0;cursor:pointer;font-family:'DM Mono',monospace;font-size:12px;padding:5px 12px;border-radius:999px;background:{{ frBg }};color:{{ frFg }}">FR</button>
+        <button onClick="{{ setEn }}" style="border:0;cursor:pointer;font-family:'DM Mono',monospace;font-size:12px;padding:5px 12px;border-radius:999px;background:{{ enBg }};color:{{ enFg }}">EN</button>
+      </div>
+      <div style="display:flex;padding:3px;border-radius:999px;background:#141A22;border:1px solid rgba(255,255,255,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)">
+        <button onClick="{{ setC }}" style="border:0;cursor:pointer;font-family:'DM Mono',monospace;font-size:12px;padding:5px 12px;border-radius:999px;background:{{ cBg }};color:{{ cFg }}">°C</button>
+        <button onClick="{{ setF }}" style="border:0;cursor:pointer;font-family:'DM Mono',monospace;font-size:12px;padding:5px 12px;border-radius:999px;background:{{ fBg }};color:{{ fFg }}">°F</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="iso-main">
+    <aside class="iso-list">
+      <div style="padding:20px 20px 12px;display:flex;flex-direction:column;gap:12px">
+        <input value="{{ query }}" onChange="{{ onQuery }}" placeholder="{{ searchPlaceholder }}" style="width:100%;background:#141A22;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:11px 14px;color:#E9E6DF;font-family:inherit;font-size:16px;outline:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
+        <div style="display:flex;gap:4px">
+          <sc-for list="{{ sortOpts }}" as="s" hint-placeholder-count="3">
+            <button onClick="{{ s.onClick }}" style="flex:1;border:0;cursor:pointer;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.04em;text-transform:uppercase;padding:7px 0;border-radius:7px;background:{{ s.bg }};color:{{ s.fg }}">{{ s.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div class="iso-list-scroll">
+        <sc-for list="{{ listRows }}" as="c" hint-placeholder-count="10">
+          <div data-city="{{ c.id }}" onClick="{{ c.onClick }}" onMouseEnter="{{ c.onEnter }}" onMouseLeave="{{ c.onLeave }}" style="display:flex;align-items:center;gap:12px;padding:11px 10px;border-radius:10px;cursor:pointer;background:{{ c.bg }}" style-hover="background:rgba(255,255,255,.04)">
+            <span style="width:4px;align-self:stretch;border-radius:2px;background:{{ c.color }}"></span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.name }}</div>
+              <div style="font-family:'DM Mono',monospace;font-size:11px;color:#8A919C;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.local }} · {{ c.cond }}</div>
+            </div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:400;font-variant-numeric:tabular-nums">{{ c.metric }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </aside>
+
+    <section class="iso-map">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap">
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A919C">{{ layerTitle }}</div>
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:clamp(30px,3.6vw,48px);font-weight:300;letter-spacing:-0.03em;margin-top:6px;text-wrap:pretty">{{ headline }}</div>
+        </div>
+        <div style="display:flex;gap:4px;padding:3px;border-radius:10px;background:#141A22;border:1px solid rgba(255,255,255,.06)">
+          <sc-for list="{{ layerOpts }}" as="l" hint-placeholder-count="3">
+            <button onClick="{{ l.onClick }}" style="border:0;cursor:pointer;font-family:inherit;font-size:13px;padding:7px 14px;border-radius:7px;background:{{ l.bg }};color:{{ l.fg }}">{{ l.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+
+      <div class="iso-map-stage">
+      <div class="iso-map-frame" ref="{{ mapRef }}" onPointerDown="{{ onMapDown }}" onPointerMove="{{ onMapMove }}" onPointerUp="{{ onMapUp }}" onPointerCancel="{{ onMapUp }}" style="position:relative;width:100%;border-radius:18px;background:linear-gradient(180deg,#3B92C2 0%,#1E6A96 48%,#164E72 100%);border:1px solid rgba(255,255,255,.16);overflow:hidden;box-shadow:0 22px 50px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.28);cursor:grab;touch-action:none;user-select:none">
+        <div ref="{{ mapWorldRef }}" style="position:absolute;inset:0;transform-origin:0 0;transform:{{ mapTransform }}">
+          <svg viewBox="0 0 1000 389" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%">
+            <path ref="{{ gratRef }}" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="0.7"></path>
+            <path ref="{{ landRef }}" fill="#E7D3AE" stroke="#8D734F" stroke-width="0.8"></path>
+            <path d="{{ nightPath }}" fill="rgba(12,28,58,.4)" style="pointer-events:none"></path>
+            <circle cx="{{ sunX }}" cy="{{ sunY }}" r="90" fill="rgba(255,214,107,.28)"></circle>
+            <circle cx="{{ sunX }}" cy="{{ sunY }}" r="7" fill="#FFD66B" stroke="#FFF6D8" stroke-width="1.5"></circle>
+          </svg>
+          <sc-for list="{{ dots }}" as="d" hint-placeholder-count="0">
+            <div onClick="{{ d.onClick }}" onMouseEnter="{{ d.onEnter }}" onMouseLeave="{{ d.onLeave }}" style="position:absolute;left:{{ d.x }};top:{{ d.y }};transform:{{ d.transform }};cursor:pointer;display:flex;align-items:center;justify-content:center;width:44px;height:44px;z-index:{{ d.z }}">
+              <span style="position:absolute;width:{{ d.halo }};height:{{ d.halo }};border-radius:50%;background:{{ d.color }};opacity:.2;animation:{{ d.pulse }}"></span>
+              <span style="position:relative;width:{{ d.size }};height:{{ d.size }};border-radius:50%;background:{{ d.color }};box-shadow:{{ d.ring }}"></span>
+              <span style="position:absolute;left:{{ d.lx }};right:{{ d.rx }};top:50%;transform:translateY(-50%);white-space:nowrap;font-family:'DM Mono',monospace;font-size:{{ d.fs }};color:{{ d.labelColor }};opacity:{{ d.labelOp }};pointer-events:none;background:{{ d.labelBg }};padding:2px 6px;border-radius:5px">{{ d.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div class="iso-zoom">
+        <button onClick="{{ zoomIn }}" style="border:0;cursor:pointer;border-radius:8px;background:#F4F0E8;color:#0A0D12;font-family:'Space Grotesk',sans-serif;font-size:18px;box-shadow:0 8px 18px rgba(0,0,0,.28)">+</button>
+        <button onClick="{{ zoomOut }}" style="border:0;cursor:pointer;border-radius:8px;background:#F4F0E8;color:#0A0D12;font-family:'Space Grotesk',sans-serif;font-size:18px;box-shadow:0 8px 18px rgba(0,0,0,.28)">−</button>
+        <button onClick="{{ resetMap }}" style="border:0;cursor:pointer;border-radius:8px;background:#0A0D12;color:#E9E6DF;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.04em">{{ worldLabel }}</button>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:#F4F0E8">{{ zoomLabel }}</div>
+      </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:#8A919C">{{ legendMin }}</span>
+        <div style="flex:1;min-width:160px;height:6px;border-radius:3px;background:{{ legendGradient }}"></div>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:#8A919C">{{ legendMax }}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.04em;color:#FFD66B">{{ daylightLabel }}</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+        <sc-for list="{{ extremes }}" as="e" hint-placeholder-count="3">
+          <div onClick="{{ e.onClick }}" style="cursor:pointer;padding:16px 18px;border-radius:14px;background:linear-gradient(180deg,#161D27 0%,#10151C 100%);border:1px solid rgba(255,255,255,.06);box-shadow:0 12px 28px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.05);display:flex;flex-direction:column;gap:8px" style-hover="border-color:rgba(255,255,255,.14)">
+            <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A919C">{{ e.label }}</div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+              <div style="font-size:17px;font-weight:500">{{ e.city }}</div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:300;color:{{ e.color }}">{{ e.value }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <aside class="iso-detail">
+      <div style="position:relative">
+        <div style="position:absolute;left:0;right:0;top:0;height:250px;overflow:hidden;pointer-events:none;border-radius:18px">
+          <sc-for list="{{ sky }}" as="p" hint-placeholder-count="0">
+            <span style="position:absolute;left:{{ p.x }};top:{{ p.y }};width:{{ p.w }};height:{{ p.h }};border-radius:{{ p.radius }};background:{{ p.bg }};opacity:{{ p.op }};animation:{{ p.anim }}"></span>
+          </sc-for>
+        </div>
+        <div style="position:relative">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A919C">{{ sel.country }} · {{ sel.local }}</div>
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:400;letter-spacing:-0.01em;margin-top:6px">{{ sel.name }}</div>
+          <div style="display:flex;align-items:flex-start;gap:6px;margin-top:10px">
+            <div class="iso-temp" style="color:{{ sel.color }};text-shadow:0 18px 40px {{ sel.color }}">{{ sel.temp }}</div>
+            <div style="font-size:28px;font-weight:300;color:#8A919C;margin-top:8px">°{{ unitLabel }}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap">
+            <div style="font-size:18px">{{ sel.cond }}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:999px;background:{{ sel.phaseBg }};color:{{ sel.phaseFg }}">{{ sel.phase }}</div>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:12px;color:#8A919C;margin-top:4px">{{ sel.feelsLine }}</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.06);border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.06)">
+        <sc-for list="{{ sel.metrics }}" as="m" hint-placeholder-count="4">
+          <div style="background:#0E131A;padding:14px 16px">
+            <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#8A919C">{{ m.k }}</div>
+            <div style="font-size:19px;margin-top:4px">{{ m.v }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A919C">{{ hoursTitle }}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:#6E7580">{{ sel.range24 }}</div>
+        </div>
+        <svg viewBox="0 0 320 110" style="width:100%;height:auto;margin-top:12px;overflow:visible">
+          <defs>
+            <linearGradient id="hg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="{{ sel.color }}" stop-opacity=".28"></stop>
+              <stop offset="1" stop-color="{{ sel.color }}" stop-opacity="0"></stop>
+            </linearGradient>
+          </defs>
+          <path d="{{ sel.area }}" fill="url(#hg)"></path>
+          <path d="{{ sel.line }}" fill="none" stroke="{{ sel.color }}" stroke-width="1.6" stroke-linejoin="round"></path>
+          <circle cx="{{ sel.dotX }}" cy="{{ sel.dotY }}" r="3.5" fill="{{ sel.color }}" stroke="#0A0D12" stroke-width="2"></circle>
+        </svg>
+        <div style="display:flex;justify-content:space-between;margin-top:8px">
+          <sc-for list="{{ sel.ticks }}" as="t" hint-placeholder-count="5">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:2px;font-family:'DM Mono',monospace">
+              <span style="font-size:12px;color:#E9E6DF">{{ t.v }}°</span>
+              <span style="font-size:10px;color:#6E7580">{{ t.h }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A919C;margin-bottom:6px">{{ weekTitle }}</div>
+        <sc-for list="{{ sel.days }}" as="w" hint-placeholder-count="7">
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 0;border-top:1px solid rgba(255,255,255,.05)">
+            <div style="min-width:0">
+              <div style="font-size:14px;line-height:1.2">{{ w.day }}</div>
+              <div style="font-family:'DM Mono',monospace;font-size:11px;color:#8A919C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ w.cond }}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:34px 64px 34px;align-items:center;gap:8px">
+              <span style="font-family:'DM Mono',monospace;font-size:12px;color:#8A919C;text-align:right">{{ w.lo }}°</span>
+              <div style="position:relative;height:4px;border-radius:2px;background:rgba(255,255,255,.06)">
+                <div style="position:absolute;top:0;bottom:0;left:{{ w.left }};width:{{ w.width }};border-radius:2px;background:{{ w.grad }}"></div>
+              </div>
+              <span style="font-family:'DM Mono',monospace;font-size:12px">{{ w.hi }}°</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:auto;padding-top:18px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.04em;color:#6E7580;line-height:1.6">
+        <div style="color:#E9E6DF">Arissani Sambouni Alex</div>
+        <div>{{ creditRole }}</div>
+        <a href="mailto:alexarissani10@gmail.com">alexarissani10@gmail.com</a>
+        <div>+241 04 69 34 98</div>
+      </div>
+    </aside>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;unit&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;C&quot;,&quot;F&quot;],&quot;default&quot;:&quot;C&quot;,&quot;tsType&quot;:&quot;'C'|'F'&quot;},&quot;layer&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;temp&quot;,&quot;wind&quot;,&quot;rain&quot;],&quot;default&quot;:&quot;temp&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showLabels&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const CITIES = [
+['reykjavik','Reykjavík','Iceland',64.15,-21.94],['nuuk','Nuuk','Greenland',64.18,-51.72],['anchorage','Anchorage','United States',61.22,-149.9],
+['vancouver','Vancouver','Canada',49.28,-123.12],['la','Los Angeles','United States',34.05,-118.24],['chicago','Chicago','United States',41.88,-87.63],
+['nyc','New York','United States',40.71,-74.01],['miami','Miami','United States',25.76,-80.19],['mexico','Mexico City','Mexico',19.43,-99.13],
+['honolulu','Honolulu','United States',21.31,-157.86],['bogota','Bogotá','Colombia',4.71,-74.07],['lima','Lima','Peru',-12.05,-77.04],
+['saopaulo','São Paulo','Brazil',-23.55,-46.63],['buenosaires','Buenos Aires','Argentina',-34.6,-58.38],['santiago','Santiago','Chile',-33.45,-70.67],
+['london','London','United Kingdom',51.51,-0.13],['madrid','Madrid','Spain',40.42,-3.7],['berlin','Berlin','Germany',52.52,13.4],
+['istanbul','Istanbul','Türkiye',41.01,28.98],['moscow','Moscow','Russia',55.76,37.62],['cairo','Cairo','Egypt',30.04,31.24],
+['lagos','Lagos','Nigeria',6.52,3.38],['nairobi','Nairobi','Kenya',-1.29,36.82],['capetown','Cape Town','South Africa',-33.92,18.42],
+['casablanca','Casablanca','Morocco',33.57,-7.59],['algiers','Algiers','Algeria',36.75,3.06],['tunis','Tunis','Tunisia',36.81,10.18],
+['dakar','Dakar','Senegal',14.72,-17.47],['freetown','Freetown','Sierra Leone',8.49,-13.23],['abidjan','Abidjan','Côte d\'Ivoire',5.36,-4.01],
+['accra','Accra','Ghana',5.6,-0.19],['lome','Lomé','Togo',6.13,1.22],['bamako','Bamako','Mali',12.64,-8],
+['ouagadougou','Ouagadougou','Burkina Faso',12.37,-1.52],['niamey','Niamey','Niger',13.51,2.13],['ndjamena','N\'Djamena','Chad',12.13,15.06],
+['khartoum','Khartoum','Sudan',15.5,32.56],['addisababa','Addis Ababa','Ethiopia',9.03,38.75],['mogadishu','Mogadishu','Somalia',2.05,45.32],
+['kampala','Kampala','Uganda',0.35,32.58],['kigali','Kigali','Rwanda',-1.94,30.06],['daressalaam','Dar es Salaam','Tanzania',-6.79,39.21],
+['libreville','Libreville','Gabon',0.42,9.47],['portgentil','Port-Gentil','Gabon',-0.72,8.78],['yaounde','Yaoundé','Cameroon',3.85,11.5],
+['douala','Douala','Cameroon',4.05,9.77],['malabo','Malabo','Equatorial Guinea',3.75,8.74],['brazzaville','Brazzaville','Congo',-4.26,15.24],
+['pointenoire','Pointe-Noire','Congo',-4.78,11.86],['kinshasa','Kinshasa','DR Congo',-4.44,15.27],['bangui','Bangui','Central African Republic',4.39,18.56],
+['luanda','Luanda','Angola',-8.84,13.29],['lusaka','Lusaka','Zambia',-15.39,28.32],['harare','Harare','Zimbabwe',-17.83,31.03],
+['gaborone','Gaborone','Botswana',-24.65,25.91],['windhoek','Windhoek','Namibia',-22.56,17.07],['maputo','Maputo','Mozambique',-25.97,32.57],
+['johannesburg','Johannesburg','South Africa',-26.2,28.05],['antananarivo','Antananarivo','Madagascar',-18.88,47.51],
+['dubai','Dubai','UAE',25.2,55.27],['tehran','Tehran','Iran',35.69,51.39],['mumbai','Mumbai','India',19.08,72.88],
+['delhi','New Delhi','India',28.61,77.21],['bangkok','Bangkok','Thailand',13.76,100.5],['singapore','Singapore','Singapore',1.35,103.82],
+['jakarta','Jakarta','Indonesia',-6.21,106.85],['beijing','Beijing','China',39.9,116.4],['ulaanbaatar','Ulaanbaatar','Mongolia',47.89,106.91],
+['yakutsk','Yakutsk','Russia',62.03,129.73],['tokyo','Tokyo','Japan',35.68,139.69],['manila','Manila','Philippines',14.6,120.98],
+['perth','Perth','Australia',-31.95,115.86],['sydney','Sydney','Australia',-33.87,151.21],['auckland','Auckland','New Zealand',-36.85,174.76]
+].map(([id,name,country,lat,lon])=>({id,name,country,lat,lon}));
+const HOME_ID='libreville';
+function chosenCity(cities, id){
+  return cities.find(c=>c.id===id)||cities.find(c=>c.id===HOME_ID)||null;
+}
+
+const WMO_EN = ['Clear','Mostly clear','Partly cloudy','Overcast','Fog','Drizzle','Rain','Snow','Showers','Snow showers','Thunderstorms'];
+const WMO_FR = ['Dégagé','Peu nuageux','Partiellement nuageux','Couvert','Brouillard','Bruine','Pluie','Neige','Averses','Averses de neige','Orages'];
+function wmoName(c, lang){const i=c===0?0:c===1?1:c===2?2:c===3?3:c<=48?4:c<=57?5:c<=67?6:c<=77?7:c<=82?8:c<=86?9:10;return (lang==='en'?WMO_EN:WMO_FR)[i];}
+const COUNTRY = {
+  Iceland:{fr:'Islande',en:'Iceland'},Greenland:{fr:'Groenland',en:'Greenland'},'United States':{fr:'États-Unis',en:'United States'},Canada:{fr:'Canada',en:'Canada'},Mexico:{fr:'Mexique',en:'Mexico'},Colombia:{fr:'Colombie',en:'Colombia'},Peru:{fr:'Pérou',en:'Peru'},Brazil:{fr:'Brésil',en:'Brazil'},Argentina:{fr:'Argentine',en:'Argentina'},Chile:{fr:'Chili',en:'Chile'},'United Kingdom':{fr:'Royaume-Uni',en:'United Kingdom'},Spain:{fr:'Espagne',en:'Spain'},Germany:{fr:'Allemagne',en:'Germany'},Türkiye:{fr:'Türkiye',en:'Türkiye'},Russia:{fr:'Russie',en:'Russia'},Egypt:{fr:'Égypte',en:'Egypt'},Nigeria:{fr:'Nigéria',en:'Nigeria'},Kenya:{fr:'Kenya',en:'Kenya'},'South Africa':{fr:'Afrique du Sud',en:'South Africa'},UAE:{fr:'Émirats arabes unis',en:'UAE'},Iran:{fr:'Iran',en:'Iran'},India:{fr:'Inde',en:'India'},Thailand:{fr:'Thaïlande',en:'Thailand'},Singapore:{fr:'Singapour',en:'Singapore'},Indonesia:{fr:'Indonésie',en:'Indonesia'},China:{fr:'Chine',en:'China'},Mongolia:{fr:'Mongolie',en:'Mongolia'},Japan:{fr:'Japon',en:'Japan'},Philippines:{fr:'Philippines',en:'Philippines'},Australia:{fr:'Australie',en:'Australia'},'New Zealand':{fr:'Nouvelle-Zélande',en:'New Zealand'},Morocco:{fr:'Maroc',en:'Morocco'},Algeria:{fr:'Algérie',en:'Algeria'},Tunisia:{fr:'Tunisie',en:'Tunisia'},Senegal:{fr:'Sénégal',en:'Senegal'},'Sierra Leone':{fr:'Sierra Leone',en:'Sierra Leone'},"Côte d'Ivoire":{fr:"Côte d'Ivoire",en:"Côte d'Ivoire"},Ghana:{fr:'Ghana',en:'Ghana'},Togo:{fr:'Togo',en:'Togo'},Mali:{fr:'Mali',en:'Mali'},'Burkina Faso':{fr:'Burkina Faso',en:'Burkina Faso'},Niger:{fr:'Niger',en:'Niger'},Chad:{fr:'Tchad',en:'Chad'},Sudan:{fr:'Soudan',en:'Sudan'},Ethiopia:{fr:'Éthiopie',en:'Ethiopia'},Somalia:{fr:'Somalie',en:'Somalia'},Uganda:{fr:'Ouganda',en:'Uganda'},Rwanda:{fr:'Rwanda',en:'Rwanda'},Tanzania:{fr:'Tanzanie',en:'Tanzania'},Gabon:{fr:'Gabon',en:'Gabon'},Cameroon:{fr:'Cameroun',en:'Cameroon'},'Equatorial Guinea':{fr:'Guinée équatoriale',en:'Equatorial Guinea'},Congo:{fr:'Congo',en:'Congo'},'DR Congo':{fr:'RD Congo',en:'DR Congo'},'Central African Republic':{fr:'République centrafricaine',en:'Central African Republic'},Angola:{fr:'Angola',en:'Angola'},Zambia:{fr:'Zambie',en:'Zambia'},Zimbabwe:{fr:'Zimbabwe',en:'Zimbabwe'},Botswana:{fr:'Botswana',en:'Botswana'},Namibia:{fr:'Namibie',en:'Namibia'},Mozambique:{fr:'Mozambique',en:'Mozambique'},Madagascar:{fr:'Madagascar',en:'Madagascar'}
+};
+function countryName(en, lang){const row=COUNTRY[en];return row?(row[lang]||en):en;}
+function loadLang(){try{const s=localStorage.getItem('isobar-lang');if(s==='en'||s==='fr')return s;}catch(e){}return 'fr';}
+const COPY = {
+  fr:{kicker:'Conditions mondiales',search:'Rechercher une ville',warm:'Chaud',cold:'Froid',az:'A–Z',high:'Haut',low:'Bas',temp:'Température',wind:'Vent',rain:'Pluie',layerTemp:'Température en surface',layerWind:'Vent à 10 m',layerRain:'Probabilité de pluie',warmest:'La plus chaude',coldest:'La plus froide',windiest:'La plus venteuse',calmest:'La plus calme',wettest:'La plus arrosée',driest:'La plus sèche',global:'Monde',humidity:'Humidité',sunrise:'Lever',sunset:'Coucher',rainChance:'Risque de pluie',uv:'Indice UV',hours:'Prochaines 24 h',week:'7 jours',today:'Aujourd’hui',now:'Maint.',live:'Direct · Open-Meteo',connecting:'Connexion',unavailable:'Indisponible',loading:'Chargement',loadingDots:'Chargement…',none:'Conditions indisponibles',reading:'Lecture de l’atmosphère…',role:'Élève gabonais en Terminale',average:n=>'Moyenne · '+n+' villes',stale:hh=>'En cache · '+hh+' UTC',globe:(a,b)=>a+'° à '+b+'° sur la planète',winds:n=>'Vents jusqu’à '+n+' km/h',wet:n=>n+' villes avec pluie probable',feels:(f,h,l)=>'Ressenti '+f+'° · Max '+h+'° Min '+l+'°',world:'Monde',dayNow:'Jour',nightNow:'Nuit',daylight:n=>n+' villes au soleil'},
+  en:{kicker:'Global conditions',search:'Search cities',warm:'Warm',cold:'Cold',az:'A–Z',high:'High',low:'Low',temp:'Temperature',wind:'Wind',rain:'Rain',layerTemp:'Surface temperature',layerWind:'Wind speed at 10 m',layerRain:'Precipitation probability',warmest:'Warmest',coldest:'Coldest',windiest:'Windiest',calmest:'Calmest',wettest:'Wettest',driest:'Driest',global:'Global',humidity:'Humidity',sunrise:'Sunrise',sunset:'Sunset',rainChance:'Rain chance',uv:'UV index',hours:'Next 24 hours',week:'7-day',today:'Today',now:'Now',live:'Live · Open-Meteo',connecting:'Connecting',unavailable:'Unavailable',loading:'Loading',loadingDots:'Loading…',none:'Conditions unavailable',reading:'Reading the atmosphere…',role:'Gabonese student in Terminale',average:n=>'Average · '+n+' cities',stale:hh=>'Stale · '+hh+' UTC',globe:(a,b)=>a+'° to '+b+'° across the globe',winds:n=>'Winds up to '+n+' km/h',wet:n=>n+' cities likely to see rain',feels:(f,h,l)=>'Feels like '+f+'° · H '+h+'° L '+l+'°',world:'World',dayNow:'Day',nightNow:'Night',daylight:n=>n+' cities in daylight'}
+};
+function projectMap(lon, lat){return [(lon+180)/360*1000, Math.max(0, Math.min(389, (80-lat)/140*389))];}
+function solar(date){
+  const start=Date.UTC(date.getUTCFullYear(),0,0);
+  const n=(date-start)/86400000;
+  const decl=23.45*Math.sin((2*Math.PI/365)*(n-81))*Math.PI/180;
+  const b=(2*Math.PI/365)*(n-81);
+  const eot=9.87*Math.sin(2*b)-7.53*Math.cos(b)-1.5*Math.sin(b);
+  const utc=date.getUTCHours()+date.getUTCMinutes()/60+date.getUTCSeconds()/3600;
+  let sub=(12-utc)*15+eot/4;
+  while(sub>180) sub-=360; while(sub<-180) sub+=360;
+  return {decl, sub};
+}
+function inDaylight(lat, lon, date){
+  const {decl, sub}=solar(date);
+  let H=(lon-sub)*Math.PI/180;
+  while(H>Math.PI) H-=2*Math.PI; while(H<-Math.PI) H+=2*Math.PI;
+  const phi=lat*Math.PI/180;
+  return Math.sin(phi)*Math.sin(decl)+Math.cos(phi)*Math.cos(decl)*Math.cos(H)>0;
+}
+function clampPct(x, y, zoom){
+  const min=(1-zoom)*100;
+  return {panX:Math.min(0, Math.max(min, x)), panY:Math.min(0, Math.max(min, y))};
+}
+function focusPct(lon, lat, zoom){
+  const fx=(lon+180)/360, fy=(80-lat)/140;
+  return clampPct((0.5-fx*zoom)*100, (0.5-fy*zoom)*100, zoom);
+}
+function nearestCity(cities, rect, panX, panY, zoom, clientX, clientY, radius){
+  let best=null, bestD=radius;
+  for(const c of cities){
+    const fx=(c.lon+180)/360, fy=(80-c.lat)/140;
+    const sx=rect.left+(panX/100)*rect.width+fx*rect.width*zoom;
+    const sy=rect.top+(panY/100)*rect.height+fy*rect.height*zoom;
+    const d=Math.hypot(clientX-sx, clientY-sy);
+    if(d<bestD){ best=c; bestD=d; }
+  }
+  return best;
+}
+function nightShade(date){
+  const {decl, sub}=solar(date);
+  const cosZ=(latDeg,H)=>{const lat=latDeg*Math.PI/180;return Math.sin(lat)*Math.sin(decl)+Math.cos(lat)*Math.cos(decl)*Math.cos(H);};
+  const column=H=>{
+    const south=cosZ(-90,H), north=cosZ(90,H), mid=cosZ(0,H);
+    if(mid<0&&south<=0&&north<=0) return {kind:'all'};
+    if(mid>=0&&south>=0&&north>=0) return {kind:'none'};
+    let lo=-90, hi=90;
+    for(let i=0;i<18;i++){const m=(lo+hi)/2; if((cosZ(m,H)<0)===(south<0)) lo=m; else hi=m;}
+    const lat=(lo+hi)/2, nightSouth=south<0;
+    if(lat>=80) return {kind:nightSouth?'all':'none'};
+    if(lat<=-60) return {kind:nightSouth?'none':'all'};
+    return {kind:nightSouth?'south':'north', lat};
+  };
+  let d='';
+  const step=3;
+  for(let lon=-180; lon<180; lon+=step){
+    let H=(lon+step/2-sub)*Math.PI/180;
+    while(H>Math.PI) H-=2*Math.PI; while(H<-Math.PI) H+=2*Math.PI;
+    const edge=column(H);
+    const x0=projectMap(lon,0)[0], x1=projectMap(lon+step,0)[0];
+    if(edge.kind==='all') d+=`M${x0.toFixed(1)} 0 L${x1.toFixed(1)} 0 L${x1.toFixed(1)} 389 L${x0.toFixed(1)} 389 Z`;
+    else if(edge.kind==='south'||edge.kind==='north'){
+      const y0=projectMap(lon, edge.lat)[1], y1=projectMap(lon+step, edge.lat)[1];
+      if(edge.kind==='south') d+=`M${x0.toFixed(1)} ${y0.toFixed(1)} L${x1.toFixed(1)} ${y1.toFixed(1)} L${x1.toFixed(1)} 389 L${x0.toFixed(1)} 389 Z`;
+      else d+=`M${x0.toFixed(1)} 0 L${x1.toFixed(1)} 0 L${x1.toFixed(1)} ${y1.toFixed(1)} L${x0.toFixed(1)} ${y0.toFixed(1)} Z`;
+    }
+  }
+  const sun=projectMap(sub, decl*180/Math.PI);
+  return {d, sunX:sun[0].toFixed(1), sunY:sun[1].toFixed(1)};
+}
+function skyFor(code, now){
+  if(code==null) return [];
+  const kind=code<=1?'clear':code<=3?'cloud':code<=48?'fog':code<=67?'rain':code<=77?'snow':code<=86?'rain':code>=95?'storm':'cloud';
+  const phase=(now%8000)/1000;
+  const items=[];
+  if(kind==='clear') items.push({x:'68%',y:'0',w:'120px',h:'120px',radius:'50%',bg:'radial-gradient(circle,#FFD66B 0%,rgba(255,214,107,0) 68%)',op:.85,anim:'iso-glow 5s ease-in-out infinite'});
+  if(kind==='cloud'||kind==='rain'||kind==='storm'||kind==='fog'){
+    for(let i=0;i<4;i++) items.push({x:(4+i*24)+'%',y:(4+(i%2)*12)+'%',w:(78+i*8)+'px',h:'26px',radius:'16px',bg:kind==='fog'?'rgba(233,230,223,.16)':'rgba(233,230,223,.2)',op:kind==='fog'?.45:.62,anim:`iso-cloud ${10+i*2}s ease-in-out ${-(phase+i)}s infinite alternate`});
+  }
+  if(kind==='rain'||kind==='storm'){
+    for(let i=0;i<18;i++) items.push({x:(3+(i*5.4)%96)+'%',y:'-8%',w:'2px',h:i%3?'16px':'22px',radius:'2px',bg:'rgba(127,209,232,.85)',op:.8,anim:`iso-rain ${.85+(i%5)*.1}s linear ${-((phase+i*.17)%2)}s infinite`});
+  }
+  if(kind==='snow'){
+    for(let i=0;i<14;i++) items.push({x:(4+i*7)+'%',y:'-6%',w:'5px',h:'5px',radius:'50%',bg:'#F4F7FB',op:.9,anim:`iso-snow ${2.2+(i%4)*.35}s linear ${-(phase+i*.2)}s infinite`});
+  }
+  if(kind==='storm') items.push({x:'0',y:'0',w:'100%',h:'100%',radius:'0',bg:'#E9E6DF',op:1,anim:'iso-flash 4.8s ease-in-out infinite'});
+  return items;
+}
+const SCALES = {
+  temp:{min:-20,max:40,stops:[[-20,'#6C8CFF'],[0,'#7FD1E8'],[12,'#A8E0B4'],[22,'#FFD66B'],[30,'#FF9A4D'],[40,'#FF5A4A']]},
+  wind:{min:0,max:50,stops:[[0,'#2E4A5C'],[10,'#4FA3B8'],[25,'#9EE3D0'],[40,'#F2F7C8'],[50,'#FFFFFF']]},
+  rain:{min:0,max:100,stops:[[0,'#2A3340'],[20,'#3E6AA8'],[50,'#5E8CF0'],[80,'#A68BFF'],[100,'#E3B8FF']]}
+};
+function hex(h){return [1,3,5].map(i=>parseInt(h.slice(i,i+2),16));}
+function colorFor(layer,v){const s=SCALES[layer].stops;if(v==null)return '#4A515C';if(v<=s[0][0])return s[0][1];for(let i=1;i<s.length;i++){if(v<=s[i][0]){const t=(v-s[i-1][0])/(s[i][0]-s[i-1][0]);const a=hex(s[i-1][1]),b=hex(s[i][1]);return 'rgb('+a.map((x,j)=>Math.round(x+(b[j]-x)*t)).join(',')+')';}}return s[s.length-1][1];}
+function gradFor(layer){const s=SCALES[layer];return 'linear-gradient(90deg,'+s.stops.map(([v,c])=>c+' '+((v-s.min)/(s.max-s.min)*100)+'%').join(',')+')';}
+function localTime(off){const d=new Date(Date.now()+off*1000);return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0');}
+function hhmm(iso){const d=new Date(iso);if(Number.isNaN(d.getTime()))return '--:--';return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0');}
+
+class Component extends DCLogic {
+  state = { data:{}, live:null, stale:false, conditionsAt:null, selectedId:HOME_ID, hoverId:null, detail:null, detailFailed:false, unit:null, layer:null, sort:'warm', query:'', tick:0, lang:null, zoom:3.2, ...focusPct(chosenCity(CITIES, HOME_ID).lon, chosenCity(CITIES, HOME_ID).lat, 3.2) };
+  landRef = React.createRef(); gratRef = React.createRef(); mapRef = React.createRef(); mapWorldRef = React.createRef();
+
+  componentDidMount(){
+    const home=chosenCity(CITIES, this.state.selectedId);
+    if(home&&home.id!==this.state.selectedId){
+      const zoom=Math.max(this.state.zoom, 3.2);
+      this.setState({selectedId:home.id, zoom, ...focusPct(home.lon, home.lat, zoom)});
+    }
+    this.loadAll(); this.loadDetail(home?home.id:HOME_ID); this.drawMap();
+    if(home&&!window.matchMedia('(max-width: 1099px)').matches) requestAnimationFrame(()=>this.reveal(home.id));
+    const map=this.mapRef.current;
+    if(map){
+      this._wheel=e=>{e.preventDefault(); this.onWheel(e);};
+      map.addEventListener('wheel', this._wheel, {passive:false});
+    }
+    this.timer=setInterval(()=>{
+      const s=this.state;
+      const age=s.conditionsAt?Date.now()-new Date(s.conditionsAt).getTime():Infinity;
+      const due=s.live!==true||age>10*60*1000;
+      this.setState(x=>({tick:x.tick+1}));
+      if(due) this.loadAll();
+      if(s.detailFailed||(s.detail&&age>10*60*1000)) this.loadDetail(s.selectedId);
+    },30000);
+  }
+  componentWillUnmount(){clearInterval(this.timer); if(this.mapRef.current&&this._wheel) this.mapRef.current.removeEventListener('wheel', this._wheel);}
+
+  applyTransform(panX, panY, zoom){
+    const el=this.mapWorldRef.current;
+    if(el) el.style.transform=`translate(${panX}%,${panY}%) scale(${zoom})`;
+  }
+
+  onWheel(e){
+    const rect=e.currentTarget.getBoundingClientRect();
+    if(!rect.width||!rect.height) return;
+    const px=(e.clientX-rect.left)/rect.width*100;
+    const py=(e.clientY-rect.top)/rect.height*100;
+    const prev=this.state.zoom;
+    const zoom=Math.min(6, Math.max(1, prev*(e.deltaY<0?1.18:1/1.18)));
+    const cx=(px-this.state.panX)/prev, cy=(py-this.state.panY)/prev;
+    const next=zoom<=1.01?{panX:0,panY:0,zoom:1}: {zoom, ...clampPct(px-cx*zoom, py-cy*zoom, zoom)};
+    this.applyTransform(next.panX, next.panY, next.zoom);
+    this.setState(next);
+  }
+
+  zoomBy(factor){
+    const prev=this.state.zoom;
+    const zoom=Math.min(6, Math.max(1, +(prev*factor).toFixed(2)));
+    const cx=(50-this.state.panX)/prev, cy=(50-this.state.panY)/prev;
+    const next=zoom<=1.01?{panX:0,panY:0,zoom:1}:{zoom, ...clampPct(50-cx*zoom, 50-cy*zoom, zoom)};
+    this.setState(next);
+  }
+
+  resetMap(){this.setState({zoom:1, panX:0, panY:0});}
+
+  onMapDown(e){
+    if(e.button!=null&&e.button!==0) return;
+    if(e.target&&e.target.closest&&e.target.closest('button')) return;
+    this._drag={x:e.clientX,y:e.clientY,panX:this.state.panX,panY:this.state.panY,moved:false,rect:e.currentTarget.getBoundingClientRect()};
+    try{ if(e.currentTarget.setPointerCapture&&e.pointerId!=null) e.currentTarget.setPointerCapture(e.pointerId); }catch(err){}
+  }
+
+  onMapMove(e){
+    if(!this._drag) return;
+    const dx=e.clientX-this._drag.x, dy=e.clientY-this._drag.y;
+    if(Math.hypot(dx,dy)>12) this._drag.moved=true;
+    if(!this._drag.moved) return;
+    const rect=this._drag.rect;
+    const next=clampPct(this._drag.panX+dx/rect.width*100, this._drag.panY+dy/rect.height*100, this.state.zoom);
+    this._drag.live=next;
+    this.applyTransform(next.panX, next.panY, this.state.zoom);
+  }
+
+  onMapUp(e){
+    const drag=this._drag;
+    this._drag=null;
+    if(!drag) return;
+    if(drag.moved){
+      if(drag.live) this.setState(drag.live);
+      this._suppressClick=true;
+      setTimeout(()=>{this._suppressClick=false;}, 80);
+      return;
+    }
+    if(e&&e.target&&e.target.closest&&e.target.closest('button')) return;
+    const map=this.mapRef.current;
+    if(!map||!e) return;
+    const city=nearestCity(CITIES, map.getBoundingClientRect(), this.state.panX, this.state.panY, this.state.zoom, e.clientX, e.clientY, 26);
+    if(!city) return;
+    this.select(city.id);
+    this._suppressClick=true;
+    setTimeout(()=>{this._suppressClick=false;}, 80);
+  }
+
+  async loadAll(){
+    if(this._loadingList) return;
+    this._loadingList=true;
+    try{
+      const r=await fetch('/api/conditions');
+      if(!r.ok) throw new Error('conditions');
+      const body=await r.json();
+      const arr=body.results;
+      if(!Array.isArray(arr)||arr.length!==CITIES.length) throw new Error('shape');
+      const data={};
+      arr.forEach((x,i)=>{
+        if(x?.current?.temperature_2m==null||x.utc_offset_seconds==null) throw new Error('shape');
+        const chance=x.hourly?.precipitation_probability?.[0];
+        data[CITIES[i].id]={...x.current,precipitation_probability:chance==null?null:chance,offset:x.utc_offset_seconds};
+      });
+      this.setState({data,live:!body.stale,stale:!!body.stale,conditionsAt:body.fetchedAt});
+    }catch(e){
+      this.setState(s=>({live:false,stale:Object.keys(s.data).length>0}));
+    }finally{this._loadingList=false;}
+  }
+
+  async loadDetail(id){
+    if(!CITIES.some(x=>x.id===id)) return;
+    try{
+      const r=await fetch('/api/cities/'+encodeURIComponent(id));
+      if(!r.ok) throw new Error('detail');
+      const body=await r.json();
+      const j=body.forecast;
+      if(!j?.current||!j.hourly||!j.daily) throw new Error('shape');
+      if(this.state.selectedId===id) this.setState({detail:{id,...j},detailFailed:false});
+    }catch(e){
+      if(this.state.selectedId===id) this.setState({detail:null,detailFailed:true});
+    }
+  }
+
+  drawMap(){
+    const go=async()=>{
+      if(!window.d3||!window.d3.geoEquirectangular||!window.topojson) return setTimeout(go,150);
+      const s=1000/(2*Math.PI); const proj=d3.geoEquirectangular().scale(s).translate([500,s*80*Math.PI/180]);
+      const path=d3.geoPath(proj);
+      if(this.gratRef.current) this.gratRef.current.setAttribute('d',path(d3.geoGraticule().step([20,20])()));
+      try{const t=await (await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json')).json();
+        if(this.landRef.current) this.landRef.current.setAttribute('d',path(topojson.feature(t,t.objects.land)));}catch(e){}
+    };
+    go();
+  }
+
+  select(id){
+    if(this._suppressClick) return;
+    const city=CITIES.find(c=>c.id===id);
+    if(!city) return;
+    const zoom=Math.max(this.state.zoom, 3.2);
+    const pan=focusPct(city.lon, city.lat, zoom);
+    const same=id===this.state.selectedId;
+    this.setState({selectedId:id, zoom, ...pan, ...(same?{}:{detail:null, detailFailed:false})});
+    if(!same) this.loadDetail(id);
+    requestAnimationFrame(()=>this.reveal(id));
+  }
+
+  reveal(id){
+    const narrow=window.matchMedia('(max-width: 1099px)').matches;
+    if(narrow){
+      const panel=document.querySelector('.iso-detail');
+      if(panel) panel.scrollIntoView({block:'start'});
+      return;
+    }
+    const row=document.querySelector('.iso-list [data-city="'+id+'"]');
+    if(row) row.scrollIntoView({block:'nearest'});
+  }
+
+  setLang(lang){try{localStorage.setItem('isobar-lang',lang);}catch(e){}this.setState({lang});}
+
+  renderVals(){
+    const st=this.state; const unit=st.unit||this.props.unit||'C'; const layer=st.layer||this.props.layer||'temp';
+    const lang=st.lang||loadLang(); const copy=COPY[lang];
+    const showLabels=this.props.showLabels??false;
+    const T=v=>v==null?'–':Math.round(unit==='F'?v*9/5+32:v);
+    const metricVal=d=>!d?null:layer==='temp'?d.temperature_2m:layer==='wind'?d.wind_speed_10m:d.precipitation_probability;
+    const metricText=d=>!d?'–':layer==='temp'?T(d.temperature_2m)+'°':layer==='wind'?(d.wind_speed_10m==null?'–':Math.round(d.wind_speed_10m)+''):(d.precipitation_probability==null?'–':Math.round(d.precipitation_probability)+'%');
+    const unitSuffix=layer==='wind'?' km/h':'';
+    const rows=CITIES.map(c=>({...c,d:st.data[c.id]}));
+    const pulsePhase=(Date.now()%2800)/1000;
+
+    let list=rows.filter(c=>{
+      if(!st.query) return true;
+      const q=st.query.toLowerCase();
+      const names=(c.name+' '+c.country+' '+(COUNTRY[c.country]?.fr||'')+' '+(COUNTRY[c.country]?.en||'')).toLowerCase();
+      return names.includes(q);
+    });
+    const mv=c=>metricVal(c.d)??-999;
+    if(st.sort==='az') list.sort((a,b)=>a.name.localeCompare(b.name));
+    else if(st.sort==='warm') list.sort((a,b)=>mv(b)-mv(a)); else list.sort((a,b)=>(metricVal(a.d)??999)-(metricVal(b.d)??999));
+    const hi=layer==='temp'?[copy.warmest,copy.coldest]:layer==='wind'?[copy.windiest,copy.calmest]:[copy.wettest,copy.driest];
+
+    const listRows=list.map(c=>({id:c.id,name:c.name,local:c.d?localTime(c.d.offset):'--:--',cond:c.d?wmoName(c.d.weather_code,lang):(st.live===false?copy.unavailable:copy.loading),metric:metricText(c.d),color:colorFor(layer,metricVal(c.d)),
+      bg:c.id===st.selectedId?'rgba(255,255,255,.06)':'transparent',onClick:()=>this.select(c.id),onEnter:()=>this.setState({hoverId:c.id}),onLeave:()=>this.setState({hoverId:null})}));
+
+    const dots=rows.map(c=>{const sel=c.id===st.selectedId,hov=c.id===st.hoverId;const focus=sel||hov;
+      const east=(c.lon+180)/360>0.75;
+      const code=c.d?.weather_code;
+      const raining=code!=null&&((code>=51&&code<=67)||(code>=80&&code<=82)||code>=95);
+      return {lx:east?'auto':'22px',rx:east?'22px':'auto',x:((c.lon+180)/360*100)+'%',y:((80-c.lat)/140*100)+'%',color:colorFor(layer,metricVal(c.d)),size:focus?'14px':'9px',halo:focus?'28px':'0px',z:focus?5:1,
+        transform:'translate(-50%,-50%) scale('+(1/Math.max(st.zoom,1)).toFixed(3)+')',
+        ring:'0 0 0 1.5px rgba(10,13,18,.9), 0 0 0 3px rgba(255,255,255,.95)',
+        pulse:focus&&raining?`iso-pulse 2.8s ease-in-out ${-pulsePhase}s infinite`:'none',
+        label:focus?c.name+'  '+metricText(c.d)+unitSuffix:metricText(c.d),fs:focus?'12px':'10px',labelColor:focus?'#0A0D12':'#C9CDD3',labelBg:focus?'#E9E6DF':'transparent',
+        labelOp:focus?1:(showLabels&&c.d?.85:0),onClick:()=>this.select(c.id),onEnter:()=>this.setState({hoverId:c.id}),onLeave:()=>this.setState({hoverId:null})};});
+
+    const valid=rows.filter(c=>c.d&&metricVal(c.d)!=null); const sorted=[...valid].sort((a,b)=>metricVal(b.d)-metricVal(a.d));
+    const avg=valid.length?valid.reduce((s,c)=>s+metricVal(c.d),0)/valid.length:null;
+    const extremes=valid.length?[
+      {label:hi[0],c:sorted[0]},{label:hi[1],c:sorted[sorted.length-1]}
+    ].map(e=>({label:e.label,city:e.c.name,value:metricText(e.c.d),color:colorFor(layer,metricVal(e.c.d)),onClick:()=>this.select(e.c.id)})).concat([{label:copy.average(valid.length),city:copy.global,value:layer==='temp'?T(avg)+'°':layer==='wind'?Math.round(avg)+'':Math.round(avg)+'%',color:colorFor(layer,avg),onClick:()=>{}}]):[];
+
+    const headline=!rows.some(c=>c.d)?(st.live===false&&!st.stale?copy.none:copy.reading):!valid.length?copy.none:layer==='temp'?copy.globe(T(sorted[sorted.length-1].d.temperature_2m),T(sorted[0].d.temperature_2m)):layer==='wind'?copy.winds(Math.round(sorted[0].d.wind_speed_10m)):copy.wet(valid.filter(c=>c.d.precipitation_probability>=50).length);
+    const leg=layer==='temp'?[T(-20)+'°',T(40)+'°']:layer==='wind'?['0 km/h','50 km/h']:['0%','100%'];
+
+    const btn=(on)=>({bg:on?'#E9E6DF':'transparent',fg:on?'#0A0D12':'#8A919C'});
+    const sortOpts=[['warm',layer==='temp'?copy.warm:copy.high],['cold',layer==='temp'?copy.cold:copy.low],['az',copy.az]].map(([k,l])=>({label:l,...btn(st.sort===k),onClick:()=>this.setState({sort:k})}));
+    const layerOpts=[['temp',copy.temp],['wind',copy.wind],['rain',copy.rain]].map(([k,l])=>({label:l,...btn(layer===k),onClick:()=>this.setState({layer:k})}));
+
+    const city=chosenCity(CITIES, st.selectedId); const cd=st.data[city.id]; const det=st.detail&&st.detail.id===city.id?st.detail:null;
+    let sel={name:city.name,country:countryName(city.country,lang),local:cd?localTime(cd.offset):'--:--',temp:T(cd?.temperature_2m),cond:cd?wmoName(cd.weather_code,lang):(st.live===false?copy.unavailable:copy.loadingDots),color:colorFor('temp',cd?.temperature_2m),feels:'–',hi:'–',lo:'–',feelsLine:copy.feels('–','–','–'),phase:'',phaseBg:'transparent',phaseFg:'transparent',metrics:[],ticks:[],days:[],line:'',area:'',dotX:0,dotY:-20,range24:''};
+    if(det){
+      const cur=det.current,h=det.hourly,d=det.daily;
+      let i0=h.time.findIndex(time=>time.slice(0,13)===String(cur.time).slice(0,13)); if(i0<0)i0=0;
+      const temps=h.temperature_2m.slice(i0,i0+25); const mn=Math.min(...temps),mx=Math.max(...temps); const rg=Math.max(mx-mn,1);
+      const pts=temps.map((v,i)=>[i/(temps.length-1)*320,12+(1-(v-mn)/rg)*86]);
+      const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+      const hr=i=>{const time=h.time[i0+i];if(time&&time.length>=13)return time.slice(11,13);const when=new Date(Date.now()+(det.utc_offset_seconds||0)*1000+i*36e5);return String(when.getUTCHours()).padStart(2,'0');};
+      const wmn=Math.min(...d.temperature_2m_min),wmx=Math.max(...d.temperature_2m_max),wr=Math.max(wmx-wmn,1);
+      const tm=s=>String(s).split('T')[1]||'–';
+      const feels=T(cur.apparent_temperature),hiC=T(d.temperature_2m_max[0]),loC=T(d.temperature_2m_min[0]);
+      const toMin=s=>{const p=String(s).split(':').map(Number);return Number.isFinite(p[0])?p[0]*60+(p[1]||0):null;};
+      const rise=toMin(tm(d.sunrise[0])), setM=toMin(tm(d.sunset[0]));
+      const nowM=(()=>{const when=new Date(Date.now()+(det.utc_offset_seconds||0)*1000);return when.getUTCHours()*60+when.getUTCMinutes();})();
+      const day=rise!=null&&setM!=null&&(setM>rise?nowM>=rise&&nowM<setM:nowM>=rise||nowM<setM);
+      sel={...sel,temp:T(cur.temperature_2m),cond:wmoName(cur.weather_code,lang),color:colorFor('temp',cur.temperature_2m),feels,hi:hiC,lo:loC,feelsLine:copy.feels(feels,hiC,loC),
+        phase:rise==null||setM==null?'':(day?copy.dayNow:copy.nightNow), phaseBg:rise==null||setM==null?'transparent':(day?'#FFD66B':'#9BB6FF'), phaseFg:rise==null||setM==null?'transparent':'#0A0D12',
+        metrics:[{k:copy.humidity,v:Math.round(cur.relative_humidity_2m)+'%'},{k:copy.wind,v:Math.round(cur.wind_speed_10m)+' km/h'},{k:copy.sunrise,v:tm(d.sunrise[0])},{k:copy.sunset,v:tm(d.sunset[0])},{k:copy.rainChance,v:h.precipitation_probability[i0]==null?'–':Math.round(h.precipitation_probability[i0])+'%'},{k:copy.uv,v:d.uv_index_max?.[0]==null?'–':Math.round(d.uv_index_max[0])}],
+        line,area:line+' L320 110 L0 110 Z',dotX:pts[0][0],dotY:pts[0][1],range24:T(mn)+'° – '+T(mx)+'°',
+        ticks:[0,6,12,18,24].map(i=>({v:T(temps[i]),h:i===0?copy.now:hr(i)})),
+        days:d.time.map((dateStr,i)=>{const lo=d.temperature_2m_min[i],hi2=d.temperature_2m_max[i];return {day:i===0?copy.today:new Date(dateStr+'T12:00:00Z').toLocaleDateString(lang==='fr'?'fr-FR':'en',{weekday:'short',timeZone:'UTC'}),cond:wmoName(d.weather_code[i],lang),lo:T(lo),hi:T(hi2),
+          left:((lo-wmn)/wr*100)+'%',width:Math.max((hi2-lo)/wr*100,4)+'%',grad:`linear-gradient(90deg,${colorFor('temp',lo)},${colorFor('temp',hi2)})`};})};
+    } else if(st.detailFailed){
+      sel.range24=copy.unavailable;
+    }
+
+    const u=new Date();
+    const shade=nightShade(u);
+    const skyCode=det?det.current.weather_code:cd?.weather_code;
+    return {
+      landRef:this.landRef,gratRef:this.gratRef,mapRef:this.mapRef,mapWorldRef:this.mapWorldRef,
+      mapTransform:'translate('+st.panX+'%,'+st.panY+'%) scale('+st.zoom+')',
+      zoomLabel:'×'+st.zoom.toFixed(1), worldLabel:copy.world,
+      daylightLabel:copy.daylight(rows.filter(c=>inDaylight(c.lat,c.lon,u)).length),
+      onMapDown:e=>this.onMapDown(e), onMapMove:e=>this.onMapMove(e), onMapUp:e=>this.onMapUp(e),
+      zoomIn:()=>this.zoomBy(1.35), zoomOut:()=>this.zoomBy(1/1.35), resetMap:()=>this.resetMap(),
+      nightPath:shade.d,sunX:shade.sunX,sunY:shade.sunY,sky:skyFor(skyCode,u.getTime()),
+      kicker:copy.kicker,searchPlaceholder:copy.search,hoursTitle:copy.hours,weekTitle:copy.week,creditRole:copy.role,
+      statusColor:st.live===null?'#FFD66B':st.stale?'#FFD66B':st.live?'#8FE3A8':'#FF9A4D',statusText:st.live===null?copy.connecting:st.stale?copy.stale(hhmm(st.conditionsAt)):st.live?copy.live:copy.unavailable,
+      utcTime:String(u.getUTCHours()).padStart(2,'0')+':'+String(u.getUTCMinutes()).padStart(2,'0'),
+      setC:()=>this.setState({unit:'C'}),setF:()=>this.setState({unit:'F'}),
+      setFr:()=>this.setLang('fr'),setEn:()=>this.setLang('en'),
+      cBg:btn(unit==='C').bg,cFg:btn(unit==='C').fg,fBg:btn(unit==='F').bg,fFg:btn(unit==='F').fg,
+      frBg:btn(lang==='fr').bg,frFg:btn(lang==='fr').fg,enBg:btn(lang==='en').bg,enFg:btn(lang==='en').fg,unitLabel:unit,
+      query:st.query,onQuery:e=>this.setState({query:e.target.value}),sortOpts,layerOpts,listRows,dots,extremes,headline,
+      layerTitle:layer==='temp'?copy.layerTemp:layer==='wind'?copy.layerWind:copy.layerRain,
+      legendGradient:gradFor(layer),legendMin:leg[0],legendMax:leg[1],sel
+    };
+  }
+}
+</script>
+</body>
+</html>
