@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5,7 +6,10 @@ import { CITIES } from "./cities.js";
 import { createWeatherService, WeatherError } from "./service.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const publicRoot = path.join(repoRoot, "Isobar Weather Dashboard");
+const besideDashboard = path.join(repoRoot, "Isobar Weather Dashboard");
+const publicRoot = existsSync(besideDashboard)
+  ? besideDashboard
+  : path.join(process.cwd(), "Isobar Weather Dashboard");
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",

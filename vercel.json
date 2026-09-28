@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 30,
+      "includeFiles": "Isobar Weather Dashboard/**"
+    }
+  },
+  "rewrites": [
+    { "source": "/", "destination": "/api/index?__path=" },
+    { "source": "/(.*)", "destination": "/api/index?__path=$1" }
+  ]
+}

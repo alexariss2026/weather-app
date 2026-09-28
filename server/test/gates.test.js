@@ -6,6 +6,7 @@ import test from "node:test";
 import { CITIES } from "../cities.js";
 import { createWeatherService } from "../service.js";
 import { createApp } from "../app.js";
+import { applyIncomingUrl } from "../../api/index.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const designPath = path.join(repoRoot, "Isobar Weather Dashboard", "Isobar Weather.dc.html");
@@ -267,4 +268,31 @@ test("an empty or unknown choice opens on Libreville", () => {
   assert.equal(chosenCity(cities, "").id, "libreville");
   assert.equal(chosenCity(cities, "missing").id, "libreville");
   assert.equal(chosenCity(cities, "dakar").id, "dakar");
+});
+
+test("a Vercel rewrite still opens the dashboard and the weather routes", async () => {
+  const config = JSON.parse(readFileSync(path.join(repoRoot, "vercel.json"), "utf8"));
+  assert.equal(config.functions["api/index.js"].includeFiles, "Isobar Weather Dashboard/**");
+  assert.ok(config.rewrites.some((rule) => rule.destination.startsWith("/api/index?__path=")));
+
+  const home = { method: "GET", url: "/api/index?__path=" };
+  applyIncomingUrl(home);
+  assert.equal(home.url, "/");
+  const page = await harness().get(home.url);
+  assert.equal(page.statusCode, 200);
+  assert.match(page.raw, /Isobar/);
+  assert.match(page.raw, /\/api\/conditions/);
+
+  const city = { method: "GET", url: "/api/index?__path=api/cities/tokyo&latitude=0" };
+  applyIncomingUrl(city);
+  assert.equal(city.url, "/api/cities/tokyo?latitude=0");
+
+  const direct = { method: "GET", url: "/api/conditions" };
+  applyIncomingUrl(direct);
+  assert.equal(direct.url, "/api/conditions");
+
+  const escaped = { method: "GET", url: "/api/index?__path=../package.json" };
+  applyIncomingUrl(escaped);
+  const blocked = await harness().get(escaped.url);
+  assert.equal(blocked.statusCode, 404);
 });

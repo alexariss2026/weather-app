@@ -18,6 +18,10 @@ Ouvrir http://localhost:3000
 npm test
 ```
 
+## Déploiement
+
+Le dépôt est prêt pour Vercel. Aucune commande de build. Vercel envoie chaque adresse à `api/index.js`, le même serveur que `npm start` : la page, `/api/conditions` et `/api/cities/{id}`. Le dossier du tableau de bord est inclus avec la fonction. Sur Vercel : importer le dépôt GitHub, garder la racine, choisir le préréglage Other, et laisser la commande de build vide.
+
 Ce projet a été réalisé par Arissani Sambouni Alex, élève gabonais en classe de Terminale, passionné d’informatique. Il reflète son sérieux et son envie d’apprendre en construisant un outil réel, branché sur des données en direct.
 
 - Courriel : alexarissani10@gmail.com
@@ -40,6 +44,10 @@ Open http://localhost:3000
 ```bash
 npm test
 ```
+
+## Deploy
+
+The repo is ready for Vercel. There is no build command. Vercel sends every URL to `api/index.js`, which is the same server as `npm start`: the page, `/api/conditions`, and `/api/cities/{id}`. The dashboard folder is included with the function. On Vercel, import the GitHub repo, keep the root directory, use the Other preset, and leave the build command empty.
 
 This project was built by Arissani Sambouni Alex, a Gabonese student in Terminale, passionate about IT. It reflects his dedication and his drive to learn by building a real tool on live data.
 
